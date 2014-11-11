@@ -27,13 +27,25 @@ use Exporter;
 @ISA = 'Exporter';
 
 # most useful functions:
-@EXPORT = qw/tgwcstransf tgwcstransfL wcstransf wcstransfinv
-wcs_evt_transfinv wcstransf_cd wcstransfinv_cd wcs_evt_transf/;
+@EXPORT = qw/wcs_tan_pix2radec wcs_tan_L_pix2radec wcs_img_radec2pix
+	     wcs_img_pix2radec wcs_evt_radec2pix wcs_cd_pix2radec
+	     wcs_cd_radec2pix wcs_evt_pix2radec/;
 
-# old functions which might be removed in the future:
-# the first two are only used by Stack.pm, the third is obsolete
-@EXPORT_OK = qw/pdlwcstransf pdlwcstransfinv wcs_evt_deg_transfinv/;
 
+# import trigonometric functions: if available, from PDL; else, from Math::Trig
+BEGIN {
+    eval {
+	require PDL;
+    };
+    unless ($@) {
+	PDL->import(qw/pdl asin acos atan/);
+	#warn "loading PDL";
+    } else {
+	require Math::Trig;
+	Math::Trig->import(qw/asin acos atan/);
+	#warn "loading Math::Trig";
+    };
+}
 
 =head1 VERSION
 
@@ -77,18 +89,19 @@ RA and Dec are always in degrees (with decimals).
 
 =head2 Gnomonic projections for event files
 
- ($ra,$dec) = wcs_evt_pix2radec($hdr,$x,$y)  #  pixel to world
+Conversion between "physical pixels" and RA,Dec.
 
- ($x,$y) = wcs_evt_radec2pix($hdr,$ra,$dec)  # world to pixel
+ ($ra,$dec) = wcs_evt_pix2radec($hdr,$x,$y)  #  phys.pixel to world
+
+ ($x,$y) = wcs_evt_radec2pix($hdr,$ra,$dec)  # world to phys.pixel
 
 
 =head2 Tangent plane projections
 
  ($ra,$dec) = wcs_tan_pix2radec($hdr,$x,$y)  #  pixel to world, rarely useful
 
- ($phys_x,$phys_y) = wcs_tan_L_pix2radec($hdr,$x,$y)  # pixel to physical_pixel
-     # using CRPIX1L keywords etc.; useful to get XMM-Newton "physical"
-     # coordinates
+ ($phys_x,$phys_y) = wcs_tan_L_pix2radec($hdr,$x,$y)
+     # pixel to physical_pixel using CRPIX1L keywords etc.
 
 
 =head1 DESCRIPTION
@@ -105,6 +118,10 @@ Astro::WCS::LibWCS).
 There is no code in this module to find out which routine should be
 used given a random FITS file, though some guidelines are given
 below. User inspection of the FITS header might be necessary.
+
+This module uses PDL, if available, or Math::Trig as a fallback. One
+routine (wcs_cd_radec2pix) only works is PDL and PDL::Slatec are
+installed since it needs to invert a matrix.
 
 =over 4
 
@@ -167,14 +184,22 @@ sub wcs_tan_L_pix2radec {
 =item ($phys_x,$phys_y) = B<tgwcstransfL>($img, $x, $y)
 
 WCS tranform on tangent plane.
-Uses CRPIX1L (and similar) instead of CRPIX1 etc.
-Returns "physical" XMM coordinates
+Uses CRPIX1L (and similar) instead of CRPIX1 etc. to return "physical" pixels
+
+This is the only routine that checks for the existence in the header of the
+necessary keywords, since they are not always present.
 
 =cut
 
     my $templ = shift;
     my $p1 = shift;
     my $p2 = shift;
+
+    unless (exists($templ->{CRPIX1L}) and exists($templ->{CRPIX2L}) and
+	    exists($templ->{CDELT1L}) and exists($templ->{CDELT2L}) and
+	    exists($templ->{CRVAL1L}) and exists($templ->{CRVAL2L})) {
+	croak "Cannot find the keywords needed for tangent plane projection.\n";
+    }
 
     #my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
     my $crpix1 = $templ->{CRPIX1L};  my $crpix2 = $templ->{CRPIX2L};
@@ -216,7 +241,7 @@ sub wcs_img_pix2radec { # (template image, xpixel, ypixel)
     # anyway, arg(-y,x) really means atan2(x,-y)
     $fi   = atan2d ($x,-$y);
 
-    $teta = atand(180/3.141592/sqrt($x*$x+$y*$y));
+    $teta = atan2d(180/3.141592/sqrt($x*$x+$y*$y), 1);
 
     print "x y=$tdlxy\n teta fi=$teta $fi\n" if ($debug);
 
@@ -249,10 +274,10 @@ sub asind {
     my $a=shift;
     return asin($a)/3.14159265*180;
 }
-sub atand {
-    my $a=shift;
-    return atan($a)/3.14159265*180;
-}
+# sub atand {
+#     my $a=shift;
+#     return atan($a)/3.14159265*180;
+# }
 sub sind {
     my $a=shift;
     return sin($a/180*3.14159265);
@@ -488,7 +513,7 @@ This format is used by ds9 when saving FITS images.
     # anyway, arg(-y,x) really means atan2(x,-y)
     $fi   = atan2d ($x,-$y);
 
-    $teta = atand(180/3.141592/sqrt($x*$x+$y*$y));
+    $teta = atan2d(180/3.141592/sqrt($x*$x+$y*$y), 1);
 
     print "x y=$tdlxy\n teta fi=$teta $fi\n" if ($debug);
 
@@ -539,7 +564,7 @@ This function has a dependence on PDL::Slatec (for matrix inversion).
     my $crval1 = $hdr->{CRVAL1};  my $crval2 = $hdr->{CRVAL2};
 
     # invert the transformation matrix:
-    my $cdmat = pdl [ [$cd1_1,$cd1_2], [$cd2_1,$cd2_2] ];
+    my $cdmat = pdl( [ [$cd1_1,$cd1_2], [$cd2_1,$cd2_2] ] );
     my $cdinv = $cdmat->matinv;
 
     print "crpix=$crpix1 $crpix2\n" if ($debug);
@@ -582,17 +607,17 @@ This function has a dependence on PDL::Slatec (for matrix inversion).
     if (ref($x) eq 'PDL') {
 	my (@p1,@p2);
 	for my $i (0..$x->dim(0)-1) {
-	    my $p1p2 = $cdinv x pdl [[$x->(($i))],[$y->(($i))]];
+	    my $p1p2 = $cdinv x pdl( [[$x->(($i))],[$y->(($i))]] );
 	    my ($tmp1,$tmp2) = $p1p2->list;
 	    push(@p1,$tmp1);
 	    push(@p2,$tmp2);
 	}
-	$p1 = pdl @p1;
-	$p2 = pdl @p2;
+	$p1 = pdl( @p1 );
+	$p2 = pdl( @p2 );
 
     } else {
 	# two scalars
-	my $p1p2 = $cdinv x pdl [[$x],[$y]];
+	my $p1p2 = $cdinv x pdl( [[$x],[$y]] );
 	($p1,$p2) = $p1p2->list;
     }
 

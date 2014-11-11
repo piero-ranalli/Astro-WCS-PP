@@ -50,7 +50,7 @@ TODO: {
     "placeholder date/time"       => qr(Date/time)
   );
 
-  module_boilerplate_ok('lib/WCS2.pm');
+  module_boilerplate_ok('lib/Astro/WCS/PP.pm');
 
 
 }
