@@ -16,11 +16,11 @@
 
 =head1 NAME
 
-WCS2.pm  -- WCS conversion utilities
+Astro::WCS::PP  --  WCS conversion utilities (Pure Perl)
 
 =cut
 
-package WCS2;
+package Astro::WCS::PP;
 
 use Carp;
 use Exporter;
@@ -37,80 +37,98 @@ wcs_evt_transfinv wcstransf_cd wcstransfinv_cd wcs_evt_transf/;
 
 =head1 VERSION
 
-2.31 (2013/8/11)
+3.0 (2014/11/11)
 
 =cut
 
-our $VERSION = '2.31';
+our $VERSION = '3.0';
 
 =head1 SYNOPSYS
 
-=head2 Tangent plane projections
+use Astro::WCS::PP;
 
- ($ra,$dec) = tgwcstransf($img->hdr,$x,$y)  # wcs tranform on tangent plane 
-     # never found a use for this
 
- ($phys_x,$phys_y) = tgwcstransfL($img->hdr,$x,$y)  # wcs tranform on tangent plane 
-     # using CRPIX1L keywords etc
-     # returns XMM physical X and Y
+In the following, $hdr is a hash ref containing a FITS header; in
+practice, assuming that files are read using rfits() from PDL it
+means:
+ $hdr = $image->hdr;      # for images
+  or
+ $hdr = $event->{hdr};    # for FITS tables aka event files
+
+RA and Dec are always in degrees (with decimals).
 
 =head2 Projections for images
 
- ($ra,$dec) = wcstransf($img,$x,$y)  # wcs transform for images
+=head3 Using CDELTn
 
- ($x,$y) = wcstransfinv($img->hdr,$ra,$dec)  # inverse for images
+ ($ra,$dec) = wcs_img_pix2radec($hdr,$x,$y)  # pixel to world
 
- ($ra,$dec) = wcstransf_cd($img,$x,$y)  # for CD formalism
+ ($x,$y) = wcs_img_radec2pix($hdr,$ra,$dec)  # world to pixel
 
- ($x,$y) = wcstransfinv_cd($img,$ra,$dec)  # for CD formalism
-       # $img can be either a FITS $img, or just its header
+ (NB: rotations [CROTA2] not yet implemented)
 
+=head3 Using the CD matrix
+
+ ($ra,$dec) = wcs_cd_pix2radec($hdr,$x,$y)  # pixel to world
+
+ ($x,$y) = wcs_cd_radec2pix($hdr,$ra,$dec)  # world to pixel
+          # This function depends on PDL::Slatec
+          # for matrix inversion
 
 =head2 Gnomonic projections for event files
 
- ($ra,$dec)=wcs_evt_transf($img->hdr,$x,$y)  #  for event files
- ($x,$y) = wcs_evt_transfinv($img->hdr,$ra,$dec)  # inverse for event files
+ ($ra,$dec) = wcs_evt_pix2radec($hdr,$x,$y)  #  pixel to world
 
-=head2 Obsolete
+ ($x,$y) = wcs_evt_radec2pix($hdr,$ra,$dec)  # world to pixel
 
- # this is marked as obsolete:
- ($x,$y) = wcs_evt_deg_transfinv($img->hdr,$ra,$dec) # for event files
-            # _deg means: inner calculations done in degrees
 
-=head2 Other
+=head2 Tangent plane projections
 
- # the following two are used in Stack.pm and should not be used for new
- # projects
- $radec = pdlwcstransf($xy,{templ=>$img, debug=>[01], pixremap=>[01] })
- $xy = pdlwcstransfinv($radec,{templ=>$img, debug=>[01], pixremap=>[01],
-                               remaptempl=>$img2})
+ ($ra,$dec) = wcs_tan_pix2radec($hdr,$x,$y)  #  pixel to world, rarely useful
+
+ ($phys_x,$phys_y) = wcs_tan_L_pix2radec($hdr,$x,$y)  # pixel to physical_pixel
+     # using CRPIX1L keywords etc.; useful to get XMM-Newton "physical"
+     # coordinates
 
 
 =head1 DESCRIPTION
 
-This module implements WCS conversion functions. The formulae are taken
-from the FITS WCS definition by Calabretta & Greisen 2002 (A&A 395,1077).
+This module implements some WCS conversion functions in pure Perl, and
+is PDL compatible. The formulae are taken from the FITS WCS definition
+by Calabretta & Greisen 2002 (A&A 395,1077).
 
-A few different possibilities exist to insert WCS information in FITS headers,
-of which the following two are implemented:
+Several different possibilities exist to insert WCS information in
+FITS headers, only a few of which are currently implemented. (Users
+with needs not satisfied by this module might look for example at
+Astro::WCS::LibWCS).
+
+There is no code in this module to find out which routine should be
+used given a random FITS file, though some guidelines are given
+below. User inspection of the FITS header might be necessary.
 
 =over 4
 
-=item the B<legacy> convention
+=item the B<legacy> or B<AIPS> convention
 
-Used by the Chandra (CIAO) and XMM-Newton (SAS) software.
+Used by the Chandra (CIAO) and XMM-Newton (SAS) software for B<images>.
 This convention uses the CRPIX[12], CDELT[12] and CRVAL[12] header keywords.
-
+Rotations (through the CROTA2 keyword) are not yet implemented.
 
 =item the B<CD> convention
 
-Used by DS9 when saving images.
+Used e.g. by DS9 when saving images.
 
 This convention replaces CDELT[12] with the CDi_j matrix. This module only
 supports 2D (bidimensional) images (and not event files) which require
 2x2 matrices.  The inversion of the matrix is needed for the inverse transform
 (ra,dec => x,y); PDL::Slatec is currently used for this
 purpose.
+
+=item B<event files> use a different projection
+
+XMM-Newton event files use different keywords (TCRPX[12], TCDLT[12],
+TCRVL[12]) and a different ("gnomonic") projection. Hence specialised
+routines are provided for them.
 
 =back
 
@@ -123,7 +141,7 @@ thus different functions are provided.
 
 =cut
 
-sub tgwcstransf { # wcs tranform on tangent plane
+sub wcs_tan_pix2radec { # wcs tranform on tangent plane
     # (template image, xpixel, ypixel)
     # returns: array with RA,DEC
 
@@ -144,7 +162,7 @@ sub tgwcstransf { # wcs tranform on tangent plane
 }
 
 
-sub tgwcstransfL { 
+sub wcs_tan_L_pix2radec {
 
 =item ($phys_x,$phys_y) = B<tgwcstransfL>($img, $x, $y)
 
@@ -170,7 +188,7 @@ Returns "physical" XMM coordinates
 
 }
 
-sub wcstransf { # (template image, xpixel, ypixel)
+sub wcs_img_pix2radec { # (template image, xpixel, ypixel)
     # returns: array with RA,DEC
 
     my $templ = shift;
@@ -179,10 +197,10 @@ sub wcstransf { # (template image, xpixel, ypixel)
 
     my $debug=0;
 
-    my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
-    my $crpix1 = $templ->hdr->{CRPIX1};  my $crpix2 = $templ->hdr->{CRPIX2};
-    my $cdelt1 = $templ->hdr->{CDELT1};  my $cdelt2 = $templ->hdr->{CDELT2};
-    my $crval1 = $templ->hdr->{CRVAL1};  my $crval2 = $templ->hdr->{CRVAL2};
+    my $naxis1 = $templ->{NAXIS1};  my $naxis2 = $templ->{NAXIS2};
+    my $crpix1 = $templ->{CRPIX1};  my $crpix2 = $templ->{CRPIX2};
+    my $cdelt1 = $templ->{CDELT1};  my $cdelt2 = $templ->{CDELT2};
+    my $crval1 = $templ->{CRVAL1};  my $crval2 = $templ->{CRVAL2};
 
     print "crpix=$crpix1 $crpix2\n" if ($debug);
     print "p1 p2=$p1 $p2\n" if ($debug);
@@ -247,7 +265,7 @@ sub cosd {
 
 
 
-sub wcstransfinv { # viceversa la reazione inversa
+sub wcs_img_radec2pix { # viceversa la reazione inversa
     # (template image, ra, dec)
     # returns: array with p1,p2 (pixel)
 
@@ -317,298 +335,12 @@ sub wcstransfinv { # viceversa la reazione inversa
 
 
 
-sub pdlwcstransf { # (template image, xpixel, ypixel)
-    use PDL;
-    use PDL::NiceSlice;
 
-    # returns: array with RA,DEC
 
-    my ($pixel,$param) = @_;   # pixel is a pdl with ra & dec
-                               # param is a hash
 
-    unless (defined($pixel)) {
-	carp "did you forget \& while calling t_code?";
-	return;
-    }
 
-    # take template
-    my $templ = $$param{templ};
-    my $debug = $$param{debug};
-    my $pixremap =$$param{pixremap};
 
-    print "debugging!\n" if ($debug);
-
-    # take x and y pixel as column piddles
-    my $p1 = $pixel(0,:);
-    my $p2 = $pixel(1,:);
-
-    my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
-    my $crpix1 = $templ->hdr->{CRPIX1};  my $crpix2 = $templ->hdr->{CRPIX2};
-    my $cdelt1 = $templ->hdr->{CDELT1};  my $cdelt2 = $templ->hdr->{CDELT2};
-    my $crval1 = $templ->hdr->{CRVAL1};  my $crval2 = $templ->hdr->{CRVAL2};
-
-    print "crpix=$crpix1 $crpix2\n" if ($debug);
-    print "p1 p2=$p1 $p2\n" if ($debug);
-
-
-    my $x = $cdelt1 * ($p1-$crpix1);
-    my $y = $cdelt2 * ($p2-$crpix2);
-
-    # fi   = atan( -y/x )
-    # teta = atan( 180/pi / ||$tdlxy|| )
-    # NB: in Calabretta&Greisen 2002 (A&A 395,1077) they use arg(-y,x)
-    # without clear definition.. or is it a typo in Sect.7.3.1?
-    # anyway, arg(-y,x) really means atan2(x,-y)
-    my $fi   = atan2d ($x,-$y);
-
-    my $teta = atand(180/3.141592/sqrt($x*$x+$y*$y));
-
-    print "x y=$tdlxy\n teta fi=$teta $fi\n" if ($debug);
-
-    my $sindelta = sind($teta) * sind($crval2)
-	-cosd($teta) * cosd($fi) * cosd($crval2);
-
-    my $cosdelta = sqrt(1-$sindelta*$sindelta);
-    my $sinalfa1 = cosd($teta)*sind($fi) / $cosdelta;
-    my $cosalfa1 = ( sind($teta)*cosd($crval2) 
-	  + cosd($teta)*cosd($fi)*sind($crval2) ) / $cosdelta;
-    my $alfa1 = atan2d ($sinalfa1,$cosalfa1);
-
-    my $alfa = $alfa1 + $crval1;
-    my $delta = asind($sindelta);
-
-    print "alfa=$alfa delta=$delta\n" if ($debug);
-
-
-    # we may now output ra & dec, which is fine for usage in $t->apply
-    # but for $t->map, we should rather remap the image in the same frame
-
-    if ($pixremap) {
-
-	# get ra & dec of image edges
-	my $edges = pdl [ [0,0], [$naxis1-1,$naxis2-1] ];
-	my $skyedges = pdlwcstransf($edges,{templ=>$templ});
-	my $xmin = $skyedges(0,0)->sclr;
-	my $xmax = $skyedges(0,1)->sclr;
-	my $ymin = $skyedges(1,0)->sclr;
-	my $ymax = $skyedges(1,1)->sclr;
-
-
-	$alfa = ($alfa-$xmin)*$naxis1 / ($xmax-$xmin);
-	$delta =($delta-$ymin)*$naxis2 / ($ymax-$ymin);
-    }
-
-
-    # output in form of piddle
-    $radec = zeroes $pixel;
-    $radec(0,:) .= $alfa;
-    $radec(1,:) .= $delta;
-
-    return $radec;
-
-}
-
-
-
-sub pdlwcstransfinv { # (template image, xpixel, ypixel)
-    use PDL::NiceSlice;
-
-    # returns: array with RA,DEC
-
-    my ($radec,$param) = @_;   # pixel is a pdl with ra & dec
-                               # param is a hash
-
-    unless (defined($radec)) {
-	barf "did you forget \& while calling t_code?";
-	return;
-    }
-
-    # take template
-    my $templ = $$param{templ};
-    my $debug = $$param{debug};
-    my $pixremap =$$param{pixremap};
-    my $remaptempl =$$param{remaptempl};
-
-
-    if (($pixremap) and not defined($remaptempl)) {
-	barf "Must provide [pix]remaptempl[ate]!";
-	# go on
-	$pixremap = undef;
-    }
-
-    # take x and y pixel as column piddles
-    my $ra = $radec(0,:);
-    my $dec = $radec(1,:);
-
-
-
-    # is the input really ra & dec, or are we pixremapping?
-    # 
-    if ($pixremap) {
-
-	# get ra & dec of image edges
-	my $edges = pdl [ [0,0],
-			  [$remaptempl->hdr->{NAXIS1}-1,
-			   $remaptempl->hdr->{NAXIS2}-1] 
-			];
-	my $skyedges = pdlwcstransf($edges,{templ=>$remaptempl});
-	my $xmin = $skyedges(0,0)->sclr;
-	my $xmax = $skyedges(0,1)->sclr;
-	my $ymin = $skyedges(1,0)->sclr;
-	my $ymax = $skyedges(1,1)->sclr;
-
-
-	$ra = $xmin + $ra*($xmax-$xmin)/$remaptempl->hdr->{NAXIS1};
-	$dec = $ymin + $dec*($ymax-$ymin)/$remaptempl->hdr->{NAXIS2};
-    }
-
-
-    my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
-    my $crpix1 = $templ->hdr->{CRPIX1};  my $crpix2 = $templ->hdr->{CRPIX2};
-    my $cdelt1 = $templ->hdr->{CDELT1};  my $cdelt2 = $templ->hdr->{CDELT2};
-    my $crval1 = $templ->hdr->{CRVAL1};  my $crval2 = $templ->hdr->{CRVAL2};
-
-    print "crpix=$crpix1 $crpix2\n" if ($debug);
-    print "ra dec=$ra $dec\n" if ($debug);
-
-    # eq 5, ricordando che fi_p = 180 per le proiezioni zenitali
-    my $fi = 180 + atan2d( -cosd($dec)*sind($ra-$crval1),
-	sind($dec)*cosd($crval2)-cosd($dec)*sind($crval2)*cosd($ra-$crval1) );
-    #if ($fi>360) { $fi-=360; }
-
-    my $sinfi = sind($fi);
-    my $tgfi = $sinfi/cosd($fi);
-
-    my $tgficheck = cosd($dec)*sind($ra-$crval1) /
-	(cosd($dec)*sind($crval2)*cosd($ra-$crval1)
-	 - sind($dec)*cosd($crval2) );
-
-    print "fi=$fi tgfi tgficheck=$tgfi $tgficheck\n" if ($debug);
-
-    my $tgteta = ( sind($dec)*sind($crval2)+
-		   cosd($dec)*cosd($crval2)*cosd($ra-$crval1) )
-	/ cosd($dec)/sind($ra-$crval1) * $sinfi;
-
-    print "tgteta=$tgteta\n" if ($debug);
-
-    my $Rteta = 180/3.14159265/$tgteta;
-    my $x = $Rteta * $sinfi;
-    my $y = -$Rteta * cosd($fi);
-
-    print "Rteta x y=$Rteta $x $y\n" if ($debug);
-
-    my $p1 = $x / $cdelt1 + $crpix1;
-    my $p2 = $y / $cdelt2 + $crpix2;
-    
-    print "p1 p2=$p1 $p2\n" if ($debug);
-
-
-    my $pixel = zeroes $radec;
-    $pixel(0,:) .= $p1;
-    $pixel(1,:) .= $p2;
-
-    return $pixel;
-
-}
-
-
-
-
-sub wcs_evt_deg_transfinv { # viceversa la reazione inversa
-    # (reference to header template event file, ra, dec)
-    # returns: array with p1,p2 (pixel)
-    # NB: IN INPUT SOLO L'HEADER! NON TUTTO IL FILE, CHE NON E' NECESSARIO
-
-    # versione con i conti in gradi (obsoleta)
-
-    # ah, e funziona anche se in input/output ci sono dei pdl
-
-    # diverso da wcstransfinv perche':
-    # se chiedo di ottenere il pixel di riferimento, usando come input
-    # le RA e DEC di REF[XY]CRPX, c'e' un problema di divisione per
-    # zero: la tangente dovrebbe tendere a infinito perche' l'angolo
-    # sottostante e' 90 gradi.
-
-    # riprendo Calabretta & Griesen e uso eq.5 considerando una proiezione
-    # gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
-
-    my $templ = shift;
-    my $ra = shift;
-    my $dec = shift;
-
-    my $debug=0;
-
-    # find relevant keywords (taken from align_evt)
-    my ($ind,$val);
-    foreach (keys %$templ) {
-	if ($templ->{$_} =~ /(RA|DEC)---?TAN/) {
-	    my $coor = $1;
-	    unless (/TCTYP(\d+)/) {
-		print "Unexpected keyword name $_ with value matching '/(RA|DEC)---?TAN/'\n";
-		next;
-	    }
-		
-	    $ind{$coor} = $1;
-	    $val{$coor} = $templ->{"TCRVL$1"};
-	}
-    }
-    
-    # get values for keywords
-    my $crpix1 = $templ->{"TCRPX$ind{RA}"};  
-    my $crpix2 = $templ->{"TCRPX$ind{DEC}"};  
-    my $cdelt1 = $templ->{"TCDLT$ind{RA}"};  
-    my $cdelt2 = $templ->{"TCDLT$ind{DEC}"};  
-    my $crval1 = $templ->{"TCRVL$ind{RA}"};  
-    my $crval2 = $templ->{"TCRVL$ind{DEC}"};  
-
-    print "crpix=$crpix1 $crpix2\n" if ($debug);
-    print "ra dec=$ra $dec\n" if ($debug);
-
-    # eq 5, ricordando che fi_p = 180 per le proiezioni zenitali
-    my $fi = 180 + atan2d( -cosd($dec)*sind($ra-$crval1),
-	sind($dec)*cosd($crval2)-cosd($dec)*sind($crval2)*cosd($ra-$crval1) );
-    #if ($fi>360) { $fi-=360; }
-
-    my $sinfi = sind($fi);
-
-
-    # ancora eq.5 nell'articolo citato
-    my $tmp = sind($dec)*sind($crval2) +
-	cosd($dec)*cosd($crval2)*cosd($ra-$crval1);
-
-    # il controllo su tmp e' necessario, perche' se RA=CRVAL1 e DEC=CRVAL2,
-    # allora tmp=1, e puo' capitare che per arrotondamenti venga tmp>1
-    # (per una n-esima cifra decimale...), e in quel caso il risultato 
-    # di asin sarebbe un bel nan... invece lo intercettiamo prima.
-    if (ref($tmp) eq 'PDL') {
-	use PDL;
-	my $msk = $tmp>1;
-	$tmp->where($msk) .= 1;
-    } else { #scalare
-	if ($tmp>1) { $tmp = 1; }
-    }
-
-    my $teta = asind( $tmp );
-		      
-    my $Rteta = 180/3.141592 * cosd($teta)/sind($teta);
-
-    my $x = $Rteta * $sinfi;
-    my $y = -$Rteta * cosd($fi);
-
-    print "Rteta x y=$Rteta $x $y\n" if ($debug);
-
-    $p1 = $x / $cdelt1 + $crpix1;
-    $p2 = $y / $cdelt2 + $crpix2;
-    
-    print "p1 p2=$p1 $p2\n" if ($debug);
-
-    return ($p1,$p2);
-
-}
-
-
-
-sub wcs_evt_transfinv { # viceversa la reazione inversa
+sub wcs_evt_radec2pix { # viceversa la reazione inversa
 
 =item ($x,$y) = B<wcs_evt_transfinv>($img->hdr,$ra,$dec)
 
@@ -654,19 +386,19 @@ gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
 		}
 		next;
 	    }
-		
+
 	    $ind{$coor} = $1;
 	    $val{$coor} = $templ->{"TCRVL$1"};
 	}
     }
-    
+
     # get values for keywords
-    my $crpix1 = $templ->{"TCRPX$ind{RA}"};  
-    my $crpix2 = $templ->{"TCRPX$ind{DEC}"};  
+    my $crpix1 = $templ->{"TCRPX$ind{RA}"};
+    my $crpix2 = $templ->{"TCRPX$ind{DEC}"};
     my $cdelt1 = $templ->{"TCDLT$ind{RA}"} *3.14159265/180;
-    my $cdelt2 = $templ->{"TCDLT$ind{DEC}"} *3.14159265/180;  
-    my $crval1 = $templ->{"TCRVL$ind{RA}"} *3.14159265/180;  
-    my $crval2 = $templ->{"TCRVL$ind{DEC}"} *3.14159265/180;  
+    my $cdelt2 = $templ->{"TCDLT$ind{DEC}"} *3.14159265/180;
+    my $crval1 = $templ->{"TCRVL$ind{RA}"} *3.14159265/180;
+    my $crval2 = $templ->{"TCRVL$ind{DEC}"} *3.14159265/180;
 
     print "crpix=$crpix1 $crpix2\n" if ($debug);
     print "ra dec=$ra $dec\n" if ($debug);
@@ -700,7 +432,7 @@ gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
     print($tmp,"\n") if ($debug);
 
     my $teta = asin( $tmp );
-		      
+
     my $Rteta = cos($teta)/sin($teta);
 
     my $x = $Rteta * $sinfi;
@@ -710,7 +442,7 @@ gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
 
     $p1 = $x / $cdelt1 + $crpix1;
     $p2 = $y / $cdelt2 + $crpix2;
-    
+
     print "p1 p2=$p1 $p2\n" if ($debug);
 
     return ($p1,$p2);
@@ -718,7 +450,7 @@ gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
 }
 
 
-sub wcstransf_cd { # (template image, xpixel, ypixel)
+sub wcs_cd_pix2radec { # (template header, xpixel, ypixel)
     # returns: array with RA,DEC
 
 =item ($ra,$dec) = B<wcstransf_cd>($img,$x,$y)
@@ -736,11 +468,11 @@ This format is used by ds9 when saving FITS images.
 
     my $debug=0;
 
-    my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
-    my $crpix1 = $templ->hdr->{CRPIX1};  my $crpix2 = $templ->hdr->{CRPIX2};
-    my $cd1_1  = $templ->hdr->{CD1_1};   my $cd1_2  = $templ->hdr->{CD1_2};
-    my $cd2_1  = $templ->hdr->{CD2_1};   my $cd2_2  = $templ->hdr->{CD2_2};
-    my $crval1 = $templ->hdr->{CRVAL1};  my $crval2 = $templ->hdr->{CRVAL2};
+    my $naxis1 = $templ->{NAXIS1};  my $naxis2 = $templ->{NAXIS2};
+    my $crpix1 = $templ->{CRPIX1};  my $crpix2 = $templ->{CRPIX2};
+    my $cd1_1  = $templ->{CD1_1};   my $cd1_2  = $templ->{CD1_2};
+    my $cd2_1  = $templ->{CD2_1};   my $cd2_2  = $templ->{CD2_2};
+    my $crval1 = $templ->{CRVAL1};  my $crval2 = $templ->{CRVAL2};
 
     print "crpix=$crpix1 $crpix2\n" if ($debug);
     print "p1 p2=$p1 $p2\n" if ($debug);
@@ -778,14 +510,13 @@ This format is used by ds9 when saving FITS images.
 
 }
 
-sub wcstransfinv_cd { # viceversa la reazione inversa
+sub wcs_cd_radec2pix { # viceversa la reazione inversa
+    require PDL;
     require PDL::Slatec;
-    # (template image, ra, dec)
+    # (template header, ra, dec)
     # returns: array with p1,p2 (pixel)
 
 =item ($x,$y) = B<wcstransfinv_cd>($img,$ra,$dec)
-
-$img can be either a FITS $img, or just its header (the code checks).
 
 Uses the "CD formalism" in Greisen & Calabretta 2002 (eq.3)
 and only valid for 2D images.
@@ -795,13 +526,12 @@ This function has a dependence on PDL::Slatec (for matrix inversion).
 
 =cut
 
-    my $templ = shift;
+    my $hdr = shift;
     my $ra = shift;
     my $dec = shift;
 
     my $debug=0;
 
-    my $hdr = ref($templ) eq 'PDL' ? $templ->hdr : $templ;
     my $naxis1 = $hdr->{NAXIS1};  my $naxis2 = $hdr->{NAXIS2};
     my $crpix1 = $hdr->{CRPIX1};  my $crpix2 = $hdr->{CRPIX2};
     my $cd1_1  = $hdr->{CD1_1};   my $cd1_2  = $hdr->{CD1_2};
@@ -876,16 +606,16 @@ This function has a dependence on PDL::Slatec (for matrix inversion).
 }
 
 
-sub wcs_evt_transf { # (template header, xpixel, ypixel)
+sub wcs_evt_pix2radec { # (template header, xpixel, ypixel)
 #     # returns: array with RA,DEC
 
     # see Eqs. 2, 14,15, 54 in Calabretta & Greisen
 
-     my $templ = shift;
-     my $p1 = shift;
-     my $p2 = shift;
+    my $templ = shift;
+    my $p1 = shift;
+    my $p2 = shift;
 
-     my $debug=0;
+    my $debug=0;
 
     # find relevant keywords (taken from align_evt)
     my (%ind,%val);
@@ -910,44 +640,44 @@ sub wcs_evt_transf { # (template header, xpixel, ypixel)
     my $crval1 = $templ->{"TCRVL$ind{RA}"};  
     my $crval2 = $templ->{"TCRVL$ind{DEC}"};  
 
-     print "crpix=$crpix1 $crpix2\n" if ($debug);
-     print "p1 p2=$p1 $p2\n" if ($debug);
+    print "crpix=$crpix1 $crpix2\n" if ($debug);
+    print "p1 p2=$p1 $p2\n" if ($debug);
 
 
-     my $x = $cdelt1 * ($p1-$crpix1);
-     my $y = $cdelt2 * ($p2-$crpix2);
+    my $x = $cdelt1 * ($p1-$crpix1);
+    my $y = $cdelt2 * ($p2-$crpix2);
 
 #     # fi   = atan( -y/x )
 #     # teta = atan( 180/pi / ||$tdlxy|| )
 #     # NB: in Calabretta&Greisen 2002 (A&A 395,1077) they use arg(-y,x)
 #     # without clear definition.. or is it a typo in Sect.7.3.1?
 #     # anyway, arg(-y,x) really means atan2(x,-y)
-     my $fi   = atan2 ($x,-$y);
-     my $Rteta= sqrt($x*$x+$y*$y);
+    my $fi   = atan2 ($x,-$y);
+    my $Rteta= sqrt($x*$x+$y*$y);
 
-     my $teta = atan(180/3.141592/$Rteta);
+    my $teta = atan(180/3.141592/$Rteta);
 
-     print "x y=$tdlxy\n teta fi=$teta $fi\n" if ($debug);
+    print "x y=$tdlxy\n teta fi=$teta $fi\n" if ($debug);
 
-     my $alfap_d = $crval1;
-     my $deltap = $crval2*3.141592/180;
-     my $fip = 3.141592;
+    my $alfap_d = $crval1;
+    my $deltap = $crval2*3.141592/180;
+    my $fip = 3.141592;
 
-     my $alfa = $alfap_d +
-	 atan2d( -cos($teta)*(sin($fi-$fip)),
-		 sin($teta)*cos($deltap)-cos($teta)*sin($deltap)*cos($fi-$fip) );
-     my $delta = asind(sin($teta)*sin($deltap) + cos($teta)*cos($deltap)*
+    my $alfa = $alfap_d +
+	atan2d( -cos($teta)*(sin($fi-$fip)),
+		sin($teta)*cos($deltap)-cos($teta)*sin($deltap)*cos($fi-$fip) );
+    my $delta = asind(sin($teta)*sin($deltap) + cos($teta)*cos($deltap)*
 		                                 cos($fi-$fip));
 
 
 
 #     my $delta = $teta;
 
-     print "alfa=$alfa delta=$delta\n" if ($debug);
+    print "alfa=$alfa delta=$delta\n" if ($debug);
 
-     return ($alfa,$delta);
+    return ($alfa,$delta);
 
- }
+}
 
 
 
@@ -963,50 +693,35 @@ __END__
 Functions are not checking for the existence of their needed keywords
 (nor for the sanity of the input).
 
-This is not yet well organized as a proper package. E.g.: strict and warnings are off,
-PDL is a dependency when it should not be.
-
 Tests are missing.
 
 Only special cases are implemented here, while the FITS standard/AIPS
-convention comprises many more projections.
+convention comprises many more projection types. Also, rotations are
+only handled by the two routines using the CD matrix.
 
 =head1 TODO
 
 =over 4
 
-=item # implement PCi_j formalism for IDL-generated images
-(e.g.  mask_ir.fits from Nico)
+=item # implement PCi_j formalism, e.g. for IDL-generated images
 
-=item #
-checks for keywords
+=item # checks for keywords
 
-=item #
-detection of formalism (CD or legacy)
+=item # detection of formalism (CD or legacy)
 
-=item #
-test cases
-
-=item #
-upload on CPAN
+=item # test cases
 
 =back
 
 =head1 HISTORY
 
-First functions written about year 2005.
+3.0 -- 2014/11/11
+  Public version. Package has been reorganised, input is consistent
+  among all functions, function names have been changed.
 
-2.0 -- 2010/6/17
-  All code should now be PDL safe.
-
-2.1 -- sometime in 2011
-  Added CD formalism.
-
-2.2 -- 2012/1/11
-  Added tgwcstransfL and POD documentation.
-
-2.21 -- 2012/1/30
-  tgwcs* now require $hdr instead of $img
+2.31 -- 2013/8/11
+  put in proper module distribution
+  use strict and warnings experimentally turned on
 
 2.3 -- 2012/7/19
   wcstransfinv now makes all calculations in radians. This addresses a
@@ -1016,9 +731,20 @@ First functions written about year 2005.
   for values of (RA,DEC) = (53.1271160027375,-28.0729683940378).
   I think that all other functions should also immediately switch to radiants.
 
-2.31 -- 2013/8/11
-  put in proper module distribution
-  use strict and warnings experimentally turned on
+2.21 -- 2012/1/30
+  tgwcs* now require $hdr instead of $img
+
+2.2 -- 2012/1/11
+  Added tgwcstransfL and POD documentation.
+
+2.1 -- sometime in 2011
+  Added CD formalism.
+
+2.0 -- 2010/6/17
+  All code should now be PDL safe.
+
+First functions written about year 2005.
+
 
 =head1 AUTHOR
 

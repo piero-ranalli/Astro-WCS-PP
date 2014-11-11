@@ -4,11 +4,11 @@ use warnings FATAL => 'all';
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
-    NAME             => 'WCS2',
-    AUTHOR           => q{Piero Ranalli <piero.ranalli@noa.gr>},
-    VERSION_FROM     => 'lib/WCS2.pm',
-    ABSTRACT_FROM    => 'lib/WCS2.pm',
-    LICENSE          => 'Artistic_2_0',
+    NAME             => 'Astro::WCS::PP',
+    AUTHOR           => q{Piero Ranalli <pranalli.github@gmail.com>},
+    VERSION_FROM     => 'lib/Astro/WCS/PP.pm',
+    ABSTRACT_FROM    => 'lib/Astro/WCS/PP.pm',
+    LICENSE          => 'AGPL',
     PL_FILES         => {},
     MIN_PERL_VERSION => 5.006,
     CONFIGURE_REQUIRES => {

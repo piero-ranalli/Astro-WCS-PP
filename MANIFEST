@@ -1,5 +1,5 @@
 Changes
-lib/WCS2.pm
+lib/Astro/WCS/PP.pm
 Makefile.PL
 MANIFEST			This list of files
 README
