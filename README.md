@@ -8,7 +8,7 @@ Astro::WCS::PP  --  WCS conversion utilities (Pure Perl)
 
 # SYNOPSYS
 
-use Astro::WCS::PP;
+    use Astro::WCS::PP;
 
 
 
@@ -18,7 +18,7 @@ means:
 
     $hdr = $image->hdr;      # for images
 
-    or
+or
 
     $hdr = $event->{hdr};    # for FITS tables aka event files
 
@@ -105,14 +105,17 @@ when trying to transform the reference pixel.
 
 - \- __event files__ use a different projection
 
-    XMM-Newton event files use different keywords (TCRPX\[12\], TCDLT\[12\],
-    TCRVL\[12\]) and a different ("gnomonic") projection. Hence specialised
-    routines are provided for them.
+    Chandra and XMM-Newton event files use different keywords (TCRPX\[12\],
+    TCDLT\[12\], TCRVL\[12\]) and a different ("gnomonic") projection. Hence
+    specialised routines are provided for them.
 
-    Also, while image "pixel" have a non-ambiguous definition, event files
-    use "physical pixels" which broadly correspond to detector pixels
-    (e.g., in Chandra, 1 phys.pixel = 1 detector pixel; in XMM-Newton, 5
-    phys.pix = 1 PN pixel).
+    Also, while "image pixels" have a non-ambiguous definition, event
+    files use "physical pixels" which broadly correspond in size to
+    detector pixels (e.g., in Chandra, 1 phys.pixel = 1 detector pixel; in
+    XMM-Newton, 5 phys.pix = 1 PN pixel) though a rotation has already
+    been applied before producing the event files. This is the reason why
+    the CROTA2 keyword is missing in event file headers and images derived
+    from those, and why rotations are not yet implemented.
 
 
 
