@@ -62,8 +62,11 @@ use Astro::WCS::PP;
 In the following, $hdr is a hash ref containing a FITS header; in
 practice, assuming that files are read using rfits() from PDL it
 means:
+
  $hdr = $image->hdr;      # for images
+
   or
+
  $hdr = $event->{hdr};    # for FITS tables aka event files
 
 RA and Dec are always in degrees (with decimals).
@@ -720,6 +723,15 @@ necessary keywords, since they are not always present.
 __END__
 
 =back
+
+=head1 INSTALLATION
+
+The standard sequence for Perl modules:
+
+ perl Makefile.PL
+ make
+ make test
+ make install
 
 =head1 BUGS
 
