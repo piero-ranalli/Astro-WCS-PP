@@ -151,8 +151,6 @@ thus different functions are provided.
 Functions are not checking for the existence of their needed keywords
 (nor for the sanity of the input).
 
-Tests are missing.
-
 Only special cases are implemented here, while the FITS standard/AIPS
 convention comprises many more projection types. Also, rotations are
 only handled by the two routines using the CD matrix.
