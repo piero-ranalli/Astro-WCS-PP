@@ -122,15 +122,22 @@ This module uses PDL, if available, or Math::Trig as a fallback. One
 routine (wcs_cd_radec2pix) only works is PDL and PDL::Slatec are
 installed since it needs to invert a matrix.
 
+The routines are divided according to the convention used to store the
+WCS info in the FITS header files.
+
+Note that using the "image" routines instead of the "event" ones when dealing
+with an event file header (or viceversa) leads to division by zeroes
+when trying to transform the reference pixel.
+
 =over 4
 
-=item the B<legacy> or B<AIPS> convention
+=item - B<legacy> or B<AIPS> convention
 
 Used by the Chandra (CIAO) and XMM-Newton (SAS) software for B<images>.
 This convention uses the CRPIX[12], CDELT[12] and CRVAL[12] header keywords.
 Rotations (through the CROTA2 keyword) are not yet implemented.
 
-=item the B<CD> convention
+=item - B<CD> convention
 
 Used e.g. by DS9 when saving images.
 
@@ -140,11 +147,17 @@ supports 2D (bidimensional) images (and not event files) which require
 (ra,dec => x,y); PDL::Slatec is currently used for this
 purpose.
 
-=item B<event files> use a different projection
+=item - B<event files> use a different projection
 
 XMM-Newton event files use different keywords (TCRPX[12], TCDLT[12],
 TCRVL[12]) and a different ("gnomonic") projection. Hence specialised
 routines are provided for them.
+
+Also, while image "pixel" have a non-ambiguous definition, event files
+use "physical pixels" which broadly correspond to detector pixels
+(e.g., in Chandra, 1 phys.pixel = 1 detector pixel; in XMM-Newton, 5
+phys.pix = 1 PN pixel).
+
 
 =back
 
@@ -178,39 +191,6 @@ sub wcs_tan_pix2radec { # wcs tranform on tangent plane
 }
 
 
-sub wcs_tan_L_pix2radec {
-
-=item ($phys_x,$phys_y) = B<tgwcstransfL>($img, $x, $y)
-
-WCS tranform on tangent plane.
-Uses CRPIX1L (and similar) instead of CRPIX1 etc. to return "physical" pixels
-
-This is the only routine that checks for the existence in the header of the
-necessary keywords, since they are not always present.
-
-=cut
-
-    my $templ = shift;
-    my $p1 = shift;
-    my $p2 = shift;
-
-    unless (exists($templ->{CRPIX1L}) and exists($templ->{CRPIX2L}) and
-	    exists($templ->{CDELT1L}) and exists($templ->{CDELT2L}) and
-	    exists($templ->{CRVAL1L}) and exists($templ->{CRVAL2L})) {
-	croak "Cannot find the keywords needed for tangent plane projection.\n";
-    }
-
-    #my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
-    my $crpix1 = $templ->{CRPIX1L};  my $crpix2 = $templ->{CRPIX2L};
-    my $cdelt1 = $templ->{CDELT1L};  my $cdelt2 = $templ->{CDELT2L};
-    my $crval1 = $templ->{CRVAL1L};  my $crval2 = $templ->{CRVAL2L};
-
-    return (
-	    $crval1+$cdelt1*($p1-$crpix1),
-	    $crval2+$cdelt2*($p2-$crpix2)
-	    );
-
-}
 
 sub wcs_img_pix2radec { # (template image, xpixel, ypixel)
     # returns: array with RA,DEC
@@ -349,7 +329,7 @@ sub wcs_img_radec2pix { # viceversa la reazione inversa
 
     $p1 = $x / $cdelt1 + $crpix1;
     $p2 = $y / $cdelt2 + $crpix2;
-    
+
     print "p1 p2=$p1 $p2\n" if ($debug);
 
     return ($p1,$p2);
@@ -366,16 +346,10 @@ sub wcs_img_radec2pix { # viceversa la reazione inversa
 
 sub wcs_evt_radec2pix { # viceversa la reazione inversa
 
-=item ($x,$y) = B<wcs_evt_transfinv>($img->hdr,$ra,$dec)
+=item ($x,$y) = B<wcs_evt_radec2pix>($img->hdr,$ra,$dec)
 
-Diverso da wcstransfinv perche':
-se chiedo di ottenere il pixel di riferimento, usando come input
-le RA e DEC di REF[XY]CRPX, c'e' un problema di divisione per
-zero: la tangente dovrebbe tendere a infinito perche' l'angolo
-sottostante e' 90 gradi.
-
-Riprendo Calabretta & Griesen e uso eq.5 considerando una proiezione
-gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
+Gnomonic projection from Calabretta & Griesen (Eq.5); uses
+TCTYPn=="RA--TAN" or "DEC--TAN").
 
 =cut
 
@@ -477,12 +451,12 @@ gnomonica (TCTYP\d == "RA--TAN" o "DEC--TAN", confronta con align_evt)
 sub wcs_cd_pix2radec { # (template header, xpixel, ypixel)
     # returns: array with RA,DEC
 
-=item ($ra,$dec) = B<wcstransf_cd>($img,$x,$y)
+=item ($ra,$dec) = B<wcs_cd_pix2radec>($img,$x,$y)
 
 Using the "CD formalism" in Greisen & Calabretta 2002 (eq.3)
 and only valid for 2D images.
 
-This format is used by ds9 when saving FITS images.
+This format is used e.g. by ds9 when saving FITS images.
 
 =cut
 
@@ -540,7 +514,7 @@ sub wcs_cd_radec2pix { # viceversa la reazione inversa
     # (template header, ra, dec)
     # returns: array with p1,p2 (pixel)
 
-=item ($x,$y) = B<wcstransfinv_cd>($img,$ra,$dec)
+=item ($x,$y) = B<wcs_cd_radec2pix>($img,$ra,$dec)
 
 Uses the "CD formalism" in Greisen & Calabretta 2002 (eq.3)
 and only valid for 2D images.
@@ -705,6 +679,41 @@ sub wcs_evt_pix2radec { # (template header, xpixel, ypixel)
 
 
 
+sub wcs_tan_L_pix2radec {
+
+=item ($phys_x,$phys_y) = B<wcs_tan_L_pix2radec>($img, $x, $y)
+
+WCS tranform on tangent plane.
+Uses CRPIX1L (and similar) instead of CRPIX1 etc. to return "physical" pixels
+
+This is the only routine that checks for the existence in the header of the
+necessary keywords, since they are not always present.
+
+=cut
+
+    my $templ = shift;
+    my $p1 = shift;
+    my $p2 = shift;
+
+    unless (exists($templ->{CRPIX1L}) and exists($templ->{CRPIX2L}) and
+	    exists($templ->{CDELT1L}) and exists($templ->{CDELT2L}) and
+	    exists($templ->{CRVAL1L}) and exists($templ->{CRVAL2L})) {
+	croak "Cannot find the keywords needed for tangent plane projection.\n";
+    }
+
+    #my $naxis1 = $templ->hdr->{NAXIS1};  my $naxis2 = $templ->hdr->{NAXIS2};
+    my $crpix1 = $templ->{CRPIX1L};  my $crpix2 = $templ->{CRPIX2L};
+    my $cdelt1 = $templ->{CDELT1L};  my $cdelt2 = $templ->{CDELT2L};
+    my $crval1 = $templ->{CRVAL1L};  my $crval2 = $templ->{CRVAL2L};
+
+    return (
+	    $crval1+$cdelt1*($p1-$crpix1),
+	    $crval2+$cdelt2*($p2-$crpix2)
+	    );
+
+}
+
+
 
 1;
 
@@ -716,8 +725,6 @@ __END__
 
 Functions are not checking for the existence of their needed keywords
 (nor for the sanity of the input).
-
-Tests are missing.
 
 Only special cases are implemented here, while the FITS standard/AIPS
 convention comprises many more projection types. Also, rotations are
@@ -776,13 +783,13 @@ Piero Ranalli, C<< <piero.ranalli at noa.gr> >>
 
 =head1 BUGS
 
-Please report any bugs or feature requests to C<piero.ranalli at noa.gr>.
+Please report any bugs or feature requests to C<pranalli-github@gmail.com>.
 
 
 =head1 SUPPORT
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc WCS2
+    perldoc Astro::WCS::PP
 
 =cut
