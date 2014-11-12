@@ -22,6 +22,8 @@ unless ($@) {
 	# we also have PDL::Slatec
 	$ntests += 2;
 	$slatec = 1;
+    } else {
+	diag( "Skipping tests on wcs_cd_radec2pix since PDL is missing" );
     }
 }
 
