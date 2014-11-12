@@ -160,7 +160,8 @@ only handled by the two routines using the CD matrix.
 - \# implement PCi\_j formalism, e.g. for IDL-generated images
 - \# checks for keywords
 - \# detection of formalism (CD or legacy)
-- \# test cases
+
+
 
 # HISTORY
 

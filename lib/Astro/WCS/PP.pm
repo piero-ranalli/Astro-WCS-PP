@@ -740,7 +740,6 @@ only handled by the two routines using the CD matrix.
 
 =item # detection of formalism (CD or legacy)
 
-=item # test cases
 
 =back
 
