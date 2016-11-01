@@ -214,7 +214,7 @@ First functions written about year 2005.
 
 # AUTHOR
 
-Piero Ranalli, `<piero.ranalli at noa.gr>`
+Piero Ranalli, `<piero.ranalli at astro.lu.se>`
 
 # BUGS
 

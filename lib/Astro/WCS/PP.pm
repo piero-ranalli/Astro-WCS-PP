@@ -793,7 +793,7 @@ First functions written about year 2005.
 
 =head1 AUTHOR
 
-Piero Ranalli, C<< <piero.ranalli at noa.gr> >>
+Piero Ranalli, C<< <piero.ranalli at astro.lu.se> >>
 
 =head1 BUGS
 
